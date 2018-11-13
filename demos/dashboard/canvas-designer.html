@@ -1,4 +1,4 @@
-﻿<!-- Demo version: 2018.10.29 -->
+﻿<!-- Demo version: 2018.11.04 -->
 
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -149,6 +149,10 @@ hr {
 
     <div style="margin-top: 20px;position: absolute;bottom: 0;background: white; padding-bottom: 20px; width: 94%">
         <div id="conversation-panel"></div>
+        <div id="key-press" style="text-align: right; display: none; font-size: 11px;">
+            <span style="vertical-align: middle;"></span>
+            <img src="https://webrtcweb.com/key-press.gif" style="height: 12px; vertical-align: middle;">
+        </div>
         <textarea id="txt-chat-message"></textarea>
         <button class="btn btn-primary" id="btn-chat-message" disabled>Send</button>
         <img id="btn-attach-file" src="https://webrtcweb.com/attach-file.png" title="Attach a File">
@@ -189,9 +193,6 @@ connection.autoCloseEntireSession = false;
 connection.maxParticipantsAllowed = 1000;
 // set value 2 for one-to-one connection
 // connection.maxParticipantsAllowed = 2;
-
-// https://www.rtcmulticonnection.org/docs/password/
-// connection.password = 'something';
 
 // here goes canvas designer
 var designer = new CanvasDesigner();
@@ -279,6 +280,16 @@ connection.onclose = connection.onerror = connection.onleave = function(event) {
 };
 
 connection.onmessage = function(event) {
+    if(event.data.typing === true) {
+        $('#key-press').show().find('span').html(event.extra.userFullName + ' is typing');
+        return;
+    }
+
+    if(event.data.typing === false) {
+        $('#key-press').hide().find('span').html('');
+        return;
+    }
+
     if (event.data.chatMessage) {
         appendChatMessage(event);
         return;
@@ -392,6 +403,8 @@ function appendChatMessage(event, checkmark_id) {
     conversationPanel.scrollTop = conversationPanel.scrollHeight - conversationPanel.scrollTop;
 }
 
+var keyPressTimer;
+var numberOfKeys = 0;
 $('#txt-chat-message').emojioneArea({
     pickerPosition: "top",
     filtersPosition: "bottom",
@@ -404,9 +417,46 @@ $('#txt-chat-message').emojioneArea({
             $('.emojionearea-category').unbind('click').bind('click', function() {
                 $('.emojionearea-button-close').click();
             });
+        },
+        keyup: function(e) {
+            var chatMessage = $('.emojionearea-editor').html();
+            if (!chatMessage || !chatMessage.replace(/ /g, '').length) {
+                connection.send({
+                    typing: false
+                });
+            }
+
+
+            clearTimeout(keyPressTimer);
+            numberOfKeys++;
+
+            if (numberOfKeys % 3 === 0) {
+                connection.send({
+                    typing: true
+                });
+            }
+
+            keyPressTimer = setTimeout(function() {
+                connection.send({
+                    typing: false
+                });
+            }, 1200);
+        },
+        blur: function() {
+            // $('#btn-chat-message').click();
+            connection.send({
+                typing: false
+            });
         }
     }
 });
+
+window.onkeyup = function(e) {
+    var code = e.keyCode || e.which;
+    if (code == 13) {
+        $('#btn-chat-message').click();
+    }
+};
 
 document.getElementById('btn-chat-message').onclick = function() {
     var chatMessage = $('.emojionearea-editor').html();
@@ -422,19 +472,22 @@ document.getElementById('btn-chat-message').onclick = function() {
         chatMessage: chatMessage,
         checkmark_id: checkmark_id
     });
+
+    connection.send({
+        typing: false
+    });
 };
 
-document.getElementById('txt-chat-message').onkeyup = function(e) {
-    var code = e.keyCode || e.which;
-    if (code == 13) {
-        document.getElementById('btn-chat-message').click(); // you can even call "onclick"
-    }
-};
-
+var recentFile;
 document.getElementById('btn-attach-file').onclick = function() {
     var file = new FileSelector();
     file.selectSingleFile(function(file) {
-        connection.send(file);
+        recentFile = file;
+
+        if(connection.getAllParticipants().length > 1) {
+            recentFile.userIndex = 0;
+            connection.send(file, connection.getAllParticipants()[recentFile.userIndex]);
+        }
     });
 };
 
@@ -466,6 +519,20 @@ connection.onFileEnd = function(file) {
     if (file.userid === connection.userid) {
         div.innerHTML = '<b>You:</b><br>' + html;
         div.style.background = '#cbffcb';
+
+        if(recentFile) {
+            recentFile.userIndex++;
+            var nextUserId = connection.getAllParticipants()[recentFile.userIndex];
+            if(nextUserId) {
+                connection.send(recentFile, nextUserId);
+            }
+            else {
+                recentFile = null;
+            }
+        }
+        else {
+            recentFile = null;
+        }
     } else {
         div.innerHTML = '<b>' + getFullName(file.userid) + ':</b><br>' + html;
     }
@@ -487,7 +554,12 @@ connection.onFileStart = function(file) {
     div.className = 'message';
 
     if (file.userid === connection.userid) {
-        div.innerHTML = '<b>You:</b><br><label>0%</label> <progress></progress>';
+        var userFullName = file.remoteUserId;
+        if(connection.peersBackup[file.remoteUserId]) {
+            userFullName = connection.peersBackup[file.remoteUserId].extra.userFullName;
+        }
+
+        div.innerHTML = '<b>You (to: ' + userFullName + '):</b><br><label>0%</label> <progress></progress>';
         div.style.background = '#cbffcb';
     } else {
         div.innerHTML = '<b>' + getFullName(file.userid) + ':</b><br><label>0%</label> <progress></progress>';
@@ -535,6 +607,10 @@ function beforeOpenRoom(callback) {
 */
 
 designer.appendTo(document.getElementById('widget-container'), function() {
+    if(!!params.password) {
+        connection.password = params.password;
+    }
+
     if (params.open === true || params.open === 'true') {
         beforeOpenRoom(function() {
             connection.open(params.sessionid, function(isRoomOpened, roomid, error) {
@@ -560,6 +636,19 @@ designer.appendTo(document.getElementById('widget-container'), function() {
                 }
                 if (error === connection.errors.ROOM_FULL) {
                     alert('Room is full.');
+                    return;
+                }
+                if (error === connection.errors.INVALID_PASSWORD) {
+                    connection.password = prompt('Please enter room password.') || '';
+                    if(!connection.password.length) {
+                        alert('Invalid password.');
+                        return;
+                    }
+                    connection.join(params.sessionid, function(isRoomJoined, roomid, error) {
+                        if(error) {
+                            alert(error);
+                        }
+                    });
                     return;
                 }
                 alert(error);
