@@ -1,6 +1,6 @@
 # Upgrade
 
-> This page explains how to upgrade to latest version (v3 or higher).
+> This page explains how to upgrade to latest version (v3).
 
 Use `streamEvents` instead of `connection.streams`:
 

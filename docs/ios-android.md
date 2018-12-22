@@ -4,10 +4,6 @@
 > 
 > So you do not need to build a cordova or ionic application.
 
-Here is list of all cordova/iosnic demos: 
-
-* https://github.com/muaz-khan/cordova-mobile-apps
-
 Please check these docs as well:
 
 * [Write iOS apps using RTCMultiConnection](http://www.rtcmulticonnection.org/docs/Write-iOS-Apps/)
@@ -105,8 +101,8 @@ cordova platform remove ios
 cordova platform remove android
 
 # add latest platform versions
-cordova platform add android@6.3.0
-cordova platform add ios@4.4.0
+cordova platform add ios
+cordova platform add android
 ```
 
 # Build your Apps
