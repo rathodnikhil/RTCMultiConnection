@@ -1,6 +1,6 @@
 'use strict';
 
-// Last time updated: 2018-12-02 2:13:21 PM UTC
+// Last time updated: 2018-12-20 3:57:01 AM UTC
 
 // _________________________
 // RTCMultiConnection v3.5.9
@@ -414,11 +414,8 @@ var RTCMultiConnection = function(roomid, forceOptions) {
         });
 
         connection.socket.on('userid-already-taken', function(useridAlreadyTaken, yourNewUserId) {
-            connection.isInitiator = false;
-            connection.userid = yourNewUserId;
-
             connection.onUserIdAlreadyTaken(useridAlreadyTaken, yourNewUserId);
-        })
+        });
 
         connection.socket.on('logs', function(log) {
             if (!connection.enableLogs) return;
@@ -476,7 +473,9 @@ var RTCMultiConnection = function(roomid, forceOptions) {
                 var that = this;
 
                 if (!isNull(data.size) && !isNull(data.type)) {
-                    self.shareFile(data, remoteUserId);
+                    if (connection.enableFileSharing) {
+                        self.shareFile(data, remoteUserId);
+                    }
                     return;
                 }
 
@@ -823,10 +822,6 @@ var RTCMultiConnection = function(roomid, forceOptions) {
         }
 
         this.shareFile = function(file, remoteUserId) {
-            if (!connection.enableFileSharing) {
-                throw '"connection.enableFileSharing" is false.';
-            }
-
             initFileBufferReader();
 
             connection.fbr.readAsArrayBuffer(file, function(uuid) {
@@ -5837,7 +5832,7 @@ var RTCMultiConnection = function(roomid, forceOptions) {
 
         // default value should be 15k because [old]Firefox's receiving limit is 16k!
         // however 64k works chrome-to-chrome
-        connection.chunkSize = 65 * 1000;
+        connection.chunkSize = 40 * 1000;
 
         connection.maxParticipantsAllowed = 1000;
 
@@ -6012,12 +6007,18 @@ var RTCMultiConnection = function(roomid, forceOptions) {
         }
 
         connection.onUserIdAlreadyTaken = function(useridAlreadyTaken, yourNewUserId) {
-            if (connection.enableLogs) {
-                console.warn('Userid already taken.', useridAlreadyTaken, 'Your new userid:', yourNewUserId);
-            }
+            // via #683
+            connection.close();
+            connection.closeSocket();
 
+            connection.isInitiator = false;
             connection.userid = connection.token();
+
             connection.join(connection.sessionid);
+
+            if (connection.enableLogs) {
+                console.warn('Userid already taken.', useridAlreadyTaken, 'Your new userid:', connection.userid);
+            }
         };
 
         connection.trickleIce = true;
