@@ -1617,7 +1617,7 @@
 
     // default value should be 15k because [old]Firefox's receiving limit is 16k!
     // however 64k works chrome-to-chrome
-    connection.chunkSize = 40 * 1000;
+    connection.chunkSize = 65 * 1000;
 
     connection.maxParticipantsAllowed = 1000;
 
@@ -1792,18 +1792,12 @@
     }
 
     connection.onUserIdAlreadyTaken = function(useridAlreadyTaken, yourNewUserId) {
-        // via #683
-        connection.close();
-        connection.closeSocket();
-
-        connection.isInitiator = false;
-        connection.userid = connection.token();
-
-        connection.join(connection.sessionid);
-
         if (connection.enableLogs) {
-            console.warn('Userid already taken.', useridAlreadyTaken, 'Your new userid:', connection.userid);
+            console.warn('Userid already taken.', useridAlreadyTaken, 'Your new userid:', yourNewUserId);
         }
+
+        connection.userid = connection.token();
+        connection.join(connection.sessionid);
     };
 
     connection.trickleIce = true;
